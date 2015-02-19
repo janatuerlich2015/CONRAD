@@ -9,7 +9,7 @@ import ij.ImageJ;
 public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 	
 	public OurPhantom() {
-		super(512, 512);
+		super(256,256);
 	}
 	
 	public void drawEllipse(int mid_x, int mid_y, int width, int height, float color) {
@@ -23,14 +23,37 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 		}		
 	}
 	
-	public float[] getProjection(float angle) {
-		float[] projection = new float[726];
+	public float[] getProjection_parallel(float angle) {
+		float[] projection = new float[364];
 		for(int x = 0; x < getWidth(); x++) {
 			for(int y = 0; y < getHeight(); y++) {
-				float s = ((float)x-256.5f) * (float) Math.cos(angle) + ((float)y-256.5f) * (float) Math.sin(angle);
+				float s = ((float)x-128) * (float) Math.cos(angle) + ((float)y-128) * (float) Math.sin(angle);
 				int first_bucket = (int) Math.floor(s);
-				projection[first_bucket + 363] += (1 - (s - first_bucket)) * getPixelValue(x, y);
-				projection[first_bucket + 1 + 363] += (s - first_bucket) * getPixelValue(x, y);
+				projection[first_bucket + 182] += (1 - (s - first_bucket)) * getPixelValue(x, y);
+				projection[first_bucket + 1 + 182] += (s - first_bucket) * getPixelValue(x, y);
+			}
+		}
+		return projection;
+	}
+	
+	public float[] getProjection_fan(float beta) {
+		float[] projection = new float[100];
+		float D = 200.0f;
+		for(int x = 0; x < getWidth(); x++) {
+			for(int y = 0; y < getHeight(); y++) {
+				if(getPixelValue(x,y) != 0.0f) { 
+				
+					float x_world = x - 128f;
+					float y_world = 128f - y;
+					float x_new = (float) (x_world * Math.cos(beta) + y_world * Math.sin(beta));
+					float y_new = (float) (- x_world * Math.sin(beta) + y_world * Math.cos(beta));
+				
+					float gamma = (float) ((Math.atan((x_new)/(D - y_new)))/Math.PI * 180.0f) + 50;
+				
+					int first_bucket = (int) Math.floor(gamma);
+					projection[first_bucket] += (1 - (gamma - first_bucket)) * getPixelValue(x, y);
+					projection[first_bucket + 1] += (gamma - first_bucket) * getPixelValue(x, y);
+				}
 			}
 		}
 		return projection;
@@ -43,7 +66,7 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 				float sum = 0.0f;
 				for(int a = 0; a < 180; a++) {
 					float angle = (float) (((float) a)/180 * Math.PI);
-					float s = (x-256) * (float) Math.cos(angle) + (y-256) * (float) Math.sin(angle) + 363;
+					float s = (x-128) * (float) Math.cos(angle) + (y-128) * (float) Math.sin(angle) + 182;
 					sum += InterpolationOperators.interpolateLinear(sinogram.getSubGrid(a), s);
 				}
 				image.putPixelValue(x, y, sum);
@@ -92,8 +115,6 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 		Grid1DComplex ramlak_filter = new Grid1DComplex(ramlak);
 		ramlak_filter.transformForward();
 		
-		ramlak_filter.show();
-		
 		for(int i = 0; i < unfiltered_lines.length; i++) {
 			unfiltered_lines[i] = new Grid1DComplex(sinogram.getSubGrid(i));
 			unfiltered_lines[i].transformForward(); 
@@ -112,48 +133,112 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 			for(int j = columns/2; j < columns; j++) {
 				filtered_lines.putPixelValue(j, i, unfiltered_lines[i].getRealAtIndex(j - columns/2));
 			}
+//			for(int j = 0; j < columns; j++) {
+//				filtered_lines.putPixelValue(j, i, unfiltered_lines[i].getRealAtIndex(j));
+//			}
 		}
 		return filtered_lines;
 	}
 	
+	public Grid2D rebin(Grid2D fanogram) {
+		Grid2D sinogram = new Grid2D(364, 180);
+		for(int theta = 0; theta < 180; theta++) {
+			for(int s = 0; s < 364; s++) {
+				float theta_radians = (float) (theta/180.f * Math.PI);
+				
+				float gamma = (float) (Math.asin((s-182)/200.0f));
+				
+				float gamma_degrees = (float) (gamma/Math.PI * 180.f);
+				float beta = theta_radians - gamma;
+				if(beta < 0) beta = (float) (2 * Math.PI + beta);
+				float beta_degrees = (float) (beta/Math.PI * 180.f);
+				int beta_int = (int) Math.floor(beta_degrees);
+				
+				int first_bucket = 0;
+				int second_bucket = 0;
+				if(beta_int < 359) {
+					first_bucket = beta_int;
+					second_bucket = beta_int + 1;
+				} else if(beta_int == 359) {
+					first_bucket = beta_int;
+					second_bucket = 0;
+				} else if(beta_int == 360) {
+					first_bucket = 0;
+					second_bucket = 1;
+				}
+				
+				if(gamma_degrees + 50 < 99) {
+					float result_first = InterpolationOperators.interpolateLinear(fanogram.getSubGrid(first_bucket), gamma_degrees + 50);
+					float result_second = InterpolationOperators.interpolateLinear(fanogram.getSubGrid(second_bucket), gamma_degrees + 50);
+					sinogram.putPixelValue(s, theta, result_first);
+				} else {
+					float result_first = fanogram.getSubGrid(first_bucket).getAtIndex(99);
+					float result_second = fanogram.getSubGrid(second_bucket).getAtIndex(99);
+					sinogram.putPixelValue(s, theta, result_first);
+				}
+			}
+		}
+		return sinogram;
+	}
+	
+	
 	public static void main(String[] args) {
 		OurPhantom phantom = new OurPhantom();
-		phantom.drawEllipse(256, 256, 200, 125, 0.5f);
-		phantom.drawEllipse(356, 270, 90, 60, 0.3f);
-		phantom.drawEllipse(156, 270, 90, 60, 0.3f);
-		phantom.drawEllipse(256, 210, 30, 30, 0.7f);
-		phantom.drawEllipse(220, 290, 20, 15, 0.1f);
+		phantom.drawEllipse(128, 128, 115, 62, 0.5f);
+		phantom.drawEllipse(178, 135, 45, 30, 0.3f);
+		phantom.drawEllipse(78, 135, 45, 30, 0.3f);
+		phantom.drawEllipse(128, 105, 15, 15, 0.7f);
+		phantom.drawEllipse(110, 145, 10, 8, 0.1f);
 		
 		ImageJ image = new ImageJ();
 		
-		phantom.show();
+		phantom.show("Phantom");
 		
-		Grid2D sinogram = new Grid2D(726, 180);
+		Grid2D sinogram = new Grid2D(364, 180);
 		for(int i = 0; i < 180; i++) {
 			float angle = ((float)i + 0.33f)/180 * (float)Math.PI;
-			float[] projection = phantom.getProjection(angle);
-			for(int j = 0; j < 726; j++) {
+			float[] projection = phantom.getProjection_parallel(angle);
+			for(int j = 0; j < 364; j++) {
 				sinogram.putPixelValue(j, i, projection[j]);
 			}
 		}
-		sinogram.show();
+		sinogram.show("Sinogram");
 		
 		
+		Grid2D fanogram = new Grid2D(100, 360);
+		for(int i = 0; i < 360; i++) {
+			
+			float angle = ((float)i)/180 * (float)Math.PI;
+			float[] projection = phantom.getProjection_fan(angle);
+			for(int j = 0; j < 100; j++) {
+				fanogram.putPixelValue(j, i, projection[j]);
+			}
+		}
+		fanogram.show("Fanogram");
 		
-		Grid2D filtered_sinogram_fourier = phantom.getFilteredSinogram_FourierDomain(sinogram);
-		filtered_sinogram_fourier.show();
+		Grid2D sinogram_from_fanogram = phantom.rebin(fanogram);
+		sinogram_from_fanogram.show("Sinogram from Fanogram");
+		
+//		Grid2D filtered_sinogram_fourier = phantom.getFilteredSinogram_FourierDomain(sinogram);
+//		filtered_sinogram_fourier.show();
 		
 		Grid2D filtered_sinogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram);
-		filtered_sinogram_spatial.show();
+		filtered_sinogram_spatial.show("Sinogram - filtered with Ram-Lak");
 		
-		Grid2D backprojected_image = phantom.getBackprojection(sinogram);
-		backprojected_image.show();
+		Grid2D filtered_sinogram_from_fanogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram_from_fanogram);
+		filtered_sinogram_from_fanogram_spatial.show("Sinogram from Fanogram - filtered with Ram-Lak");
 		
-		Grid2D backprojected_image_fourier = phantom.getBackprojection(filtered_sinogram_fourier);
-		backprojected_image_fourier.show();
+//		Grid2D backprojected_image = phantom.getBackprojection(sinogram);
+//		backprojected_image.show();
+		
+//		Grid2D backprojected_image_fourier = phantom.getBackprojection(filtered_sinogram_fourier);
+//		backprojected_image_fourier.show();
 		
 		Grid2D backprojected_image_spatial = phantom.getBackprojection(filtered_sinogram_spatial);
-		backprojected_image_spatial.show();
+		backprojected_image_spatial.show("Image - filtered with Ram-Lak");
+		
+		Grid2D backprojected_image_from_fanogram_spatial = phantom.getBackprojection(filtered_sinogram_from_fanogram_spatial);
+		backprojected_image_from_fanogram_spatial.show("Image from Fanogram - filtered with Ram-Lak");
 	}
 	
 }
