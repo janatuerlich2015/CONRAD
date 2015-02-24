@@ -9,17 +9,33 @@ import com.jogamp.opencl.CLDevice;
 import com.jogamp.opencl.CLKernel;
 import com.jogamp.opencl.CLProgram;
 import com.jogamp.opencl.CLMemory.Mem;
+//import com.jogamp.opengl.util.awt.ImageUtil;
 
 import edu.stanford.rsl.conrad.data.numeric.Grid1D;
 import edu.stanford.rsl.conrad.data.numeric.Grid1DComplex;
 import edu.stanford.rsl.conrad.data.numeric.Grid2D;
+import edu.stanford.rsl.conrad.data.numeric.Grid3D;
 import edu.stanford.rsl.conrad.data.numeric.InterpolationOperators;
 import edu.stanford.rsl.conrad.data.numeric.NumericPointwiseOperators;
 import edu.stanford.rsl.conrad.data.numeric.opencl.OpenCLGrid2D;
+import edu.stanford.rsl.conrad.filtering.CosineWeightingTool;
+import edu.stanford.rsl.conrad.filtering.ImageFilteringTool;
+import edu.stanford.rsl.conrad.filtering.RampFilteringTool;
+import edu.stanford.rsl.conrad.filtering.opencl.BilateralFiltering3DTool;
+import edu.stanford.rsl.conrad.filtering.redundancy.ParkerWeightingTool;
+import edu.stanford.rsl.conrad.geometry.trajectories.Trajectory;
+import edu.stanford.rsl.conrad.opencl.OpenCLBackProjector;
+import edu.stanford.rsl.conrad.opencl.OpenCLDetectorMotionBackProjector;
 import edu.stanford.rsl.conrad.opencl.OpenCLUtil;
+import edu.stanford.rsl.conrad.utils.Configuration;
+import edu.stanford.rsl.conrad.utils.FileUtil;
+import edu.stanford.rsl.conrad.utils.ImageUtil;
 import edu.stanford.rsl.tutorial.fan.FanBeamBackprojector2D;
 import edu.stanford.rsl.tutorial.fan.redundancy.ParkerWeights;
+import edu.stanford.rsl.tutorial.motion.compensation.OpenCLCompensatedBackProjector;
+import ij.IJ;
 import ij.ImageJ;
+import ij.ImagePlus;
 
 public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 	
@@ -355,58 +371,58 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 	
 	
 	public static void main(String[] args) {
-		OurPhantom phantom = new OurPhantom();
-		phantom.drawEllipse(phantom.width/2, phantom.width/2, (int) (phantom.width/2.5f), phantom.width/4, 0.5f);
-		phantom.drawEllipse(phantom.width/2 + phantom.width/5, 5 * phantom.width/9, phantom.width/6, phantom.width/9, 0.3f);
-		phantom.drawEllipse(phantom.width/2 - phantom.width/5, 5 * phantom.width/9, phantom.width/6, phantom.width/9, 0.3f);
-		phantom.drawEllipse(phantom.width/2, phantom.width/2 - phantom.width/10, phantom.width/15, phantom.width/15, 0.7f);
-		phantom.drawEllipse(phantom.width/2 - phantom.width/10, phantom.width/2 + phantom.width/10, phantom.width/25, phantom.width/30, 0.1f);
-		
-		ImageJ image = new ImageJ();
-		
-		phantom.show("Phantom");
-		
-		Grid2D sinogram = phantom.getSinogram();
-//		sinogram.show("Sinogram");
-		
-		Grid2D fanogram = phantom.getFanogram(false, true);
-//		fanogram.show("Fanogram - Full Scan");
-		
-		Grid2D fanogram_short = phantom.getFanogram(true, true);
-//		fanogram_short.show("Fanogram - Short Scan");
-		
-		Grid2D sinogram_from_fanogram = phantom.rebin(fanogram, true);
-//		sinogram_from_fanogram.show("Sinogram from Fanogram");
-		
-		Grid2D sinogram_from_fanogram_short = phantom.rebin(fanogram_short, true);
-//		sinogram_from_fanogram_short.show("Sinogram from Short-Scan Fanogram");
-		
-		Grid2D filtered_sinogram_fourier = phantom.getFilteredSinogram_FourierDomain(sinogram);
-//		filtered_sinogram_fourier.show();
-		
-		Grid2D filtered_sinogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram);
-//		filtered_sinogram_spatial.show("Sinogram - filtered with Ram-Lak");
-		
-		Grid2D filtered_sinogram_from_fanogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram_from_fanogram);
-//		filtered_sinogram_from_fanogram_spatial.show("Sinogram from Fanogram - filtered with Ram-Lak");
-		
-		Grid2D filtered_sinogram_from_fanogram_spatial_short = phantom.getFilteredSinogram_SpatialDomain(sinogram_from_fanogram_short);
+//		OurPhantom phantom = new OurPhantom();
+//		phantom.drawEllipse(phantom.width/2, phantom.width/2, (int) (phantom.width/2.5f), phantom.width/4, 0.5f);
+//		phantom.drawEllipse(phantom.width/2 + phantom.width/5, 5 * phantom.width/9, phantom.width/6, phantom.width/9, 0.3f);
+//		phantom.drawEllipse(phantom.width/2 - phantom.width/5, 5 * phantom.width/9, phantom.width/6, phantom.width/9, 0.3f);
+//		phantom.drawEllipse(phantom.width/2, phantom.width/2 - phantom.width/10, phantom.width/15, phantom.width/15, 0.7f);
+//		phantom.drawEllipse(phantom.width/2 - phantom.width/10, phantom.width/2 + phantom.width/10, phantom.width/25, phantom.width/30, 0.1f);
+//		
+//		ImageJ image = new ImageJ();
+//		
+//		phantom.show("Phantom");
+//		
+//		Grid2D sinogram = phantom.getSinogram();
+////		sinogram.show("Sinogram");
+//		
+//		Grid2D fanogram = phantom.getFanogram(false, true);
+////		fanogram.show("Fanogram - Full Scan");
+//		
+//		Grid2D fanogram_short = phantom.getFanogram(true, true);
+////		fanogram_short.show("Fanogram - Short Scan");
+//		
+//		Grid2D sinogram_from_fanogram = phantom.rebin(fanogram, true);
+////		sinogram_from_fanogram.show("Sinogram from Fanogram");
+//		
+//		Grid2D sinogram_from_fanogram_short = phantom.rebin(fanogram_short, true);
+////		sinogram_from_fanogram_short.show("Sinogram from Short-Scan Fanogram");
+//		
+//		Grid2D filtered_sinogram_fourier = phantom.getFilteredSinogram_FourierDomain(sinogram);
+////		filtered_sinogram_fourier.show();
+//		
+//		Grid2D filtered_sinogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram);
+////		filtered_sinogram_spatial.show("Sinogram - filtered with Ram-Lak");
+//		
+//		Grid2D filtered_sinogram_from_fanogram_spatial = phantom.getFilteredSinogram_SpatialDomain(sinogram_from_fanogram);
+////		filtered_sinogram_from_fanogram_spatial.show("Sinogram from Fanogram - filtered with Ram-Lak");
+//		
+//		Grid2D filtered_sinogram_from_fanogram_spatial_short = phantom.getFilteredSinogram_SpatialDomain(sinogram_from_fanogram_short);
 //		filtered_sinogram_from_fanogram_spatial_short.show("Sinogram from Short-Scan Fanogram - filtered with Ram-Lak");
-		
-		Grid2D backprojected_image = phantom.getBackprojectionCL(sinogram);
-		backprojected_image.show("CL backprojection of sinogram");
-		
-		Grid2D backprojected_image_fourier = phantom.getBackprojectionCL(filtered_sinogram_fourier);
-		backprojected_image_fourier.show("CL backprojection of ramp-filtered sinogram");
-		    
-		Grid2D backprojected_image_spatial = phantom.getBackprojectionCL(filtered_sinogram_spatial);
-		backprojected_image_spatial.show("CL backprojection of Ram-Lak filtered sinogram");
-		
-		Grid2D backprojected_image_from_fanogram_spatial = phantom.getBackprojectionCL(filtered_sinogram_from_fanogram_spatial);
-		backprojected_image_from_fanogram_spatial.show("CL backprojection of sinogram from fanogram");
-		
-		Grid2D backprojected_image_from_fanogram_spatial_short = phantom.getBackprojectionCL(filtered_sinogram_from_fanogram_spatial_short);
-		backprojected_image_from_fanogram_spatial_short.show("CL backprojection of short-scan sinogram from fanogram");
+//	
+//		Grid2D backprojected_image = phantom.getBackprojectionCL(sinogram);
+//		backprojected_image.show("CL backprojection of sinogram");
+//		
+//		Grid2D backprojected_image_fourier = phantom.getBackprojectionCL(filtered_sinogram_fourier);
+//		backprojected_image_fourier.show("CL backprojection of ramp-filtered sinogram");
+//		    
+//		Grid2D backprojected_image_spatial = phantom.getBackprojectionCL(filtered_sinogram_spatial);
+//		backprojected_image_spatial.show("CL backprojection of Ram-Lak filtered sinogram");
+//		
+//		Grid2D backprojected_image_from_fanogram_spatial = phantom.getBackprojectionCL(filtered_sinogram_from_fanogram_spatial);
+//		backprojected_image_from_fanogram_spatial.show("CL backprojection of sinogram from fanogram");
+//		
+//		Grid2D backprojected_image_from_fanogram_spatial_short = phantom.getBackprojectionCL(filtered_sinogram_from_fanogram_spatial_short);
+//		backprojected_image_from_fanogram_spatial_short.show("CL backprojection of short-scan sinogram from fanogram");
 		
 		
 		
@@ -491,6 +507,38 @@ public class OurPhantom extends edu.stanford.rsl.conrad.data.numeric.Grid2D {
 //		kernelFunction.release();
 //		program.release();
 //		context.release();
+		
+		
+		Grid3D impAsGrid = null;
+		try {
+		    
+		    new ImageJ();
+		    String filenameString = FileUtil.myFileChoose("/proj/ciptmp/recoData/DensityProjection_No248_Static60_0.8deg_REFERENCE.tif", false);
+		    
+		    ImagePlus imp = IJ.openImage(filenameString);
+		    impAsGrid = ImageUtil.wrapImagePlus(imp);
+		    impAsGrid.show("Data from file");
+		    String filename = FileUtil.myFileChoose(".xml", false);
+		    Configuration.setGlobalConfiguration(Configuration.loadConfiguration(filename));
+		    CosineWeightingTool cosine = new CosineWeightingTool();
+		    cosine.configure();
+		    ParkerWeightingTool parker = new ParkerWeightingTool();
+		    parker.configure();
+		    RampFilteringTool ramp = new RampFilteringTool();
+		    ramp.configure();
+		    OpenCLBackProjector projector = new OpenCLBackProjector();
+		    projector.configure();
+		    Grid3D filtered_data = ImageUtil.applyFiltersInParallel(impAsGrid, new ImageFilteringTool[] {cosine, parker, ramp, projector});
+		    filtered_data.show();
+		} catch (Exception e) {
+		    // TODO Auto-generated catch block
+		    e.printStackTrace();
+		}
+		
+		
+		
+		
+		
 	}
 	
 }
